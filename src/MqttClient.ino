@@ -70,9 +70,17 @@ const char gprsPass[] = "";
 // MQTT details
 const char *broker = "mqtt.dynamicdevices.co.uk";
 
-const char *topicLed = "GsmClientTest/led";
-const char *topicInit = "GsmClientTest/init";
-const char *topicLedStatus = "GsmClientTest/ledStatus";
+const char *topicPrefix = "GsmClientTest";
+
+const char *topicFragmentLed = "led";
+const char *topicFragmentInit = "init";
+const char *topicFragmentTele = "tele";
+const char *topicFragmentLedStatus = "ledStatus";
+
+const char *payloadTele = "This is a payload of 32 bytes...";
+const char *payloadInit = "GsmClientTest started";
+
+String _imei = "unknown";
 
 #include <TinyGsmClient.h>
 #include <PubSubClient.h>
@@ -87,10 +95,39 @@ TinyGsm modem(SerialAT);
 TinyGsmClient client(modem);
 PubSubClient mqtt(client);
 
+// How often do we send MQTT KeepAlive messages?
+// By default this is 15s with PubSubClient but this is quite
+// often for a cellular connection so reduce it to 120s
+
+//#define MQTT_KEEPALIVE_SECS 120
+
+// If we want to test out regular publishing of an MQTT
+// payload then define this and we will publish to
+// `topicTele` with payload `payloadTele`
+
+//#define MQTT_PUBLISH_INTERVAL_SECS 10*60
+
+// Log metrics for how many bytes PubSubClient has sent and
+// received to/from the underlying stream layer periodically
+#define MQTT_LOG_METRICS_SECS 60
+
 int ledStatus = LOW;
 
 uint32_t lastReconnectAttempt = 0;
 uint32_t lastMetricsOutput = 0;
+#ifdef MQTT_PUBLISH_INTERVAL_SECS
+uint32_t lastTelePublish = 0;
+#endif
+
+String getFullTopic(const char *topixPrefix, const char *topicFragment)
+{
+    String fullTopic = String(topicPrefix); 
+    fullTopic += "/";
+    fullTopic += _imei;
+    fullTopic += "/";
+    fullTopic += topicFragment;
+    return fullTopic;
+}
 
 void mqttCallback(char *topic, byte *payload, unsigned int len)
 {
@@ -101,10 +138,10 @@ void mqttCallback(char *topic, byte *payload, unsigned int len)
     SerialMon.println();
 
     // Only proceed if incoming message's topic matches
-    if (String(topic) == topicLed) {
+    if (String(topic) == getFullTopic(topicPrefix, topicFragmentLed)) {
         ledStatus = !ledStatus;
         digitalWrite(LED_GPIO, ledStatus);
-        mqtt.publish(topicLedStatus, ledStatus ? "1" : "0");
+        mqtt.publish(getFullTopic(topicPrefix, topicFragmentLedStatus).c_str(), ledStatus ? "1" : "0");
     }
 }
 
@@ -114,7 +151,7 @@ boolean mqttConnect()
     SerialMon.print(broker);
 
     // Connect to MQTT Broker
-    boolean status = mqtt.connect("GsmClientTest");
+    boolean status = mqtt.connect( String("GsmClientTest" + _imei).c_str());
 
     // Or, if you want to authenticate MQTT:
     //boolean status = mqtt.connect("GsmClientName", "mqtt_user", "mqtt_pass");
@@ -124,8 +161,9 @@ boolean mqttConnect()
         return false;
     }
     SerialMon.println(" success");
-    mqtt.publish(topicInit, "GsmClientTest started");
-    mqtt.subscribe(topicLed);
+    SerialMon.println((String)"Publishing: " + getFullTopic(topicPrefix, topicFragmentInit).c_str() + ": " + payloadInit);
+    mqtt.publish(getFullTopic(topicPrefix, topicFragmentInit).c_str(), payloadInit);
+    mqtt.subscribe(getFullTopic(topicPrefix, topicFragmentLed).c_str());
     return mqtt.connected();
 }
 
@@ -163,6 +201,9 @@ void setup()
     }
 #endif
 
+    _imei = modem.getIMEI();
+    SerialMon.println((String)"IMEI: " + _imei);
+
     SerialMon.print("Waiting for network...");
     if (!modem.waitForNetwork()) {
         SerialMon.println(" fail");
@@ -179,28 +220,37 @@ void setup()
     SerialMon.print(F("Connecting to "));
     SerialMon.print(apn);
     if (!modem.gprsConnect(apn, gprsUser, gprsPass)) {
-        SerialMon.println(" fail");
+        SerialMon.println(" - failed");
         delay(10000);
         return;
     }
-    SerialMon.println(" success");
+    SerialMon.println(" - success");
 
     if (modem.isGprsConnected()) {
         SerialMon.println("GPRS connected");
     }
 
+    SerialMon.println("Local IP; " + modem.getLocalIP());
+
     // MQTT Broker setup
     mqtt.setServer(broker, 1883);
     mqtt.setCallback(mqttCallback);
+#ifdef MQTT_KEEPALIVE_SECS
+    // By default PubSubClient sends keepalives at 15s intervals
+    SerialMon.println((String)"Set MQTT KeepAlive to " + MQTT_KEEPALIVE_SECS + " seconds");
+
+    mqtt.setKeepAlive(MQTT_KEEPALIVE_SECS);
+#endif
 }
 
 void loop()
 {
+    uint32_t t;
 
     if (!mqtt.connected()) {
         SerialMon.println("=== MQTT NOT CONNECTED ===");
         // Reconnect every 10 seconds
-        uint32_t t = millis();
+        t = millis();
         if (t - lastReconnectAttempt > 10000L) {
             lastReconnectAttempt = t;
             if (mqttConnect()) {
@@ -211,8 +261,17 @@ void loop()
         return;
     }
 
-    uint32_t t = millis();
-    if(t - lastMetricsOutput > 60000) {
+#ifdef MQTT_PUBLISH_INTERVAL_SECS
+    t = millis();
+    if(t - lastTelePublish > MQTT_PUBLISH_INTERVAL_SECS * 1000) {
+        lastTelePublish = t;
+        SerialMon.println((String)"Publishing: " + getFullTopic(topicPrefix, topicFragmentTele).c_str() + ": " + payloadTele);
+        mqtt.publish(getFullTopic(topicPrefix, topicFragmentTele).c_str(), payloadTele);
+    }
+#endif
+
+    t = millis();
+    if(t - lastMetricsOutput > MQTT_LOG_METRICS_SECS * 1000) {
         lastMetricsOutput = t;
         uint32_t txCount = mqtt.getTxCount();
         uint32_t rxCount = mqtt.getRxCount();
