@@ -247,8 +247,22 @@ void loop()
 {
     uint32_t t;
 
+loopstart:
+
+    if(!modem.isNetworkConnected() ) {
+        SerialMon.println(millis() + ": === NETWORK NOT CONNECTED ===");
+        delay(10000);
+        goto loopstart;
+    }
+
+    if(!modem.isGprsConnected()) {
+        SerialMon.println(millis() + ": === GPRS NOT CONNECTED ===");
+        delay(10000);
+        goto loopstart;
+    }
+    
     if (!mqtt.connected()) {
-        SerialMon.println("=== MQTT NOT CONNECTED ===");
+        SerialMon.println(millis() + ": === MQTT NOT CONNECTED ===");
         // Reconnect every 10 seconds
         t = millis();
         if (t - lastReconnectAttempt > 10000L) {
@@ -257,15 +271,15 @@ void loop()
                 lastReconnectAttempt = 0;
             }
         }
-        delay(100);
-        return;
+        delay(1000);
+        goto loopstart;
     }
 
 #ifdef MQTT_PUBLISH_INTERVAL_SECS
     t = millis();
     if(t - lastTelePublish > MQTT_PUBLISH_INTERVAL_SECS * 1000) {
         lastTelePublish = t;
-        SerialMon.println((String)"Publishing: " + getFullTopic(topicPrefix, topicFragmentTele).c_str() + ": " + payloadTele);
+        SerialMon.println((String)millis() + ": Publishing: " + getFullTopic(topicPrefix, topicFragmentTele).c_str() + ": " + payloadTele);
         mqtt.publish(getFullTopic(topicPrefix, topicFragmentTele).c_str(), payloadTele);
     }
 #endif
@@ -275,7 +289,7 @@ void loop()
         lastMetricsOutput = t;
         uint32_t txCount = mqtt.getTxCount();
         uint32_t rxCount = mqtt.getRxCount();
-        SerialMon.println((String)"##### PubSubClient Tx Bytes: " + txCount + ", Rx Bytes: " + rxCount);
+        SerialMon.println((String)millis() + ": ##### PubSubClient Tx Bytes: " + txCount + ", Rx Bytes: " + rxCount);
     }
     
     mqtt.loop();

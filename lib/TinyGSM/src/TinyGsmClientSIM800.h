@@ -514,6 +514,7 @@ class TinyGsmSim800 : public TinyGsmModem<TinyGsmSim800>,
                     bool ssl = false, int timeout_s = 75) {
     int8_t   rsp;
     uint32_t timeout_ms = ((uint32_t)timeout_s) * 1000;
+
 #if !defined(TINY_GSM_MODEM_SIM900)
     sendAT(GF("+CIPSSL="), ssl);
     rsp = waitResponse();
@@ -531,12 +532,20 @@ class TinyGsmSim800 : public TinyGsmModem<TinyGsmSim800>,
     if (waitResponse() != 1) return false;
 #endif
 #endif
+
+    // Set the TCP keepalive settings 
+    // Defaults: +CIPTKA: 1,7200,75,9
+//      sendAT(GF("+CIPTKA=1,7200,75,9"));
+//    sendAT(GF("+CIPTKA=0"));
+//    waitResponse();
+
     sendAT(GF("+CIPSTART="), mux, ',', GF("\"TCP"), GF("\",\""), host,
            GF("\","), port);
     rsp = waitResponse(
         timeout_ms, GF("CONNECT OK" GSM_NL), GF("CONNECT FAIL" GSM_NL),
         GF("ALREADY CONNECT" GSM_NL), GF("ERROR" GSM_NL),
         GF("CLOSE OK" GSM_NL));  // Happens when HTTPS handshake fails
+
     return (1 == rsp);
   }
 
