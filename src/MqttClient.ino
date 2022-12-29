@@ -59,8 +59,10 @@
 #define TINY_GSM_USE_GPRS true
 #define TINY_GSM_USE_WIFI false
 
-// Override TCP Keepalive to 5 minutes (only in customised SIM800L module for now)
-#define TINY_GSM_TCP_KEEPALIVE_SECS 300
+// Q. I think the standard TCP timeout is 15 minutes so lets set TCP KeepAlive to 10 minutes?
+//
+// Override TCP Keepalive to 10 minutes (only in customised SIM800L module for now)
+#define TINY_GSM_TCP_KEEPALIVE_SECS 600
 
 // set GSM PIN, if any
 #define GSM_PIN ""
@@ -118,7 +120,7 @@ PubSubClient mqtt(client);
 // payload then define this and we will publish to
 // `topicTele` with payload `payloadTele`
 
-//#define MQTT_PUBLISH_INTERVAL_SECS 10*60
+#define MQTT_PUBLISH_INTERVAL_SECS 60*60
 
 // Log metrics for how many bytes PubSubClient has sent and
 // received to/from the underlying stream layer periodically
@@ -133,7 +135,7 @@ uint32_t _networkWaitStartTimeMs = 0;
 uint32_t _gprsWaitStartTimeMs = 0;
 
 #ifdef MQTT_PUBLISH_INTERVAL_SECS
-uint32_t lastTelePublish = 0;
+uint32_t _lastTelePublish = 0;
 #endif
 
 // Wait for network for up to 3 minutes before reinitialising modem
