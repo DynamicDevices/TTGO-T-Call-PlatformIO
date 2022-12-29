@@ -167,7 +167,6 @@ boolean mqttConnect()
     return mqtt.connected();
 }
 
-
 void setup()
 {
     // Set console baud rate
@@ -243,43 +242,70 @@ void setup()
 #endif
 }
 
+enum ConnectState
+{
+    UNKNOWN,
+    ACQUIRE_NETWORK,
+    ACQUIRE_DATA,
+    ACQUIRE_MQTT,
+    CONNECTED
+};
+
+ConnectState _currentState = UNKNOWN;
+
 void loop()
 {
     uint32_t t;
 
 loopstart:
 
-    if(!modem.isNetworkConnected() ) {
-        SerialMon.println(millis() + ": === NETWORK NOT CONNECTED ===");
-        delay(10000);
-        goto loopstart;
+    if(_currentState == UNKNOWN || _currentState == ACQUIRE_NETWORK) {
+        if(!modem.isNetworkConnected() ) {
+            SerialMon.println("=== NETWORK NOT CONNECTED ===");
+            delay(1000);
+            _currentState = ACQUIRE_NETWORK;
+            goto loopstart;
+        }
     }
 
-    if(!modem.isGprsConnected()) {
-        SerialMon.println(millis() + ": === GPRS NOT CONNECTED ===");
-        delay(10000);
-        goto loopstart;
-    }
-    
-    if (!mqtt.connected()) {
-        SerialMon.println(millis() + ": === MQTT NOT CONNECTED ===");
-        // Reconnect every 10 seconds
-        t = millis();
-        if (t - lastReconnectAttempt > 10000L) {
-            lastReconnectAttempt = t;
-            if (mqttConnect()) {
-                lastReconnectAttempt = 0;
-            }
+    if(_currentState == ACQUIRE_DATA) {
+        if(!modem.isGprsConnected()) {
+            SerialMon.println("=== GPRS NOT CONNECTED ===");
+            delay(1000);
+            _currentState = ACQUIRE_DATA;
+            goto loopstart;
         }
-        delay(1000);
-        goto loopstart;
     }
+
+    // Currently we ALWAYS check each loop that MQTT is connected
+    if(_currentState == ACQUIRE_MQTT || _currentState == CONNECTED) {
+        if (!mqtt.connected()) {
+            _currentState = ACQUIRE_MQTT;
+            SerialMon.println("=== MQTT NOT CONNECTED ===");
+            // Reconnect every 10 seconds
+            t = millis();
+            if (t - lastReconnectAttempt > 10000L) {
+                lastReconnectAttempt = t;
+                if (mqttConnect()) {
+                    lastReconnectAttempt = 0;
+                }
+                else {
+                    // Go back and check network
+                    _currentState = UNKNOWN;
+                }
+            }
+            delay(1000);
+            goto loopstart;
+        }
+    }
+
+    _currentState = CONNECTED;
 
 #ifdef MQTT_PUBLISH_INTERVAL_SECS
     t = millis();
     if(t - lastTelePublish > MQTT_PUBLISH_INTERVAL_SECS * 1000) {
         lastTelePublish = t;
-        SerialMon.println((String)millis() + ": Publishing: " + getFullTopic(topicPrefix, topicFragmentTele).c_str() + ": " + payloadTele);
+        SerialMon.println((String)"Publishing: " + getFullTopic(topicPrefix, topicFragmentTele).c_str() + ": " + payloadTele);
         mqtt.publish(getFullTopic(topicPrefix, topicFragmentTele).c_str(), payloadTele);
     }
 #endif
@@ -289,7 +315,8 @@ loopstart:
         lastMetricsOutput = t;
         uint32_t txCount = mqtt.getTxCount();
         uint32_t rxCount = mqtt.getRxCount();
-        SerialMon.println((String)millis() + ": ##### PubSubClient Tx Bytes: " + txCount + ", Rx Bytes: " + rxCount);
+        SerialMon.println((String)"##### PubSubClient Tx Bytes: " + txCount + ", Rx Bytes: " + rxCount);
+        Serial.println("[APP] Free memory: " + String(esp_get_free_heap_size()) + " bytes");
     }
     
     mqtt.loop();
