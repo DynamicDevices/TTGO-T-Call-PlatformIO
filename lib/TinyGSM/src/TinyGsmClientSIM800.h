@@ -178,6 +178,15 @@ class TinyGsmSim800 : public TinyGsmModem<TinyGsmSim800>,
 
     DBG(GF("### Modem:"), getModemName());
 
+    sendAT(GF("E0"));  // Echo Off
+    if (waitResponse() != 1) { return false; }
+
+#ifdef TINY_GSM_TCP_KEEPALIVE_SECS
+    DBG((String)"Overriding TCP KeepAlive to " + TINY_GSM_TCP_KEEPALIVE_SECS + " secs");
+    sendAT(GF((String)"+CIPTKA=1," + TINY_GSM_TCP_KEEPALIVE_SECS + "," + TINY_GSM_TCP_KEEPALIVE_SECS + ",9"));
+    if (waitResponse() != 1) { return false; }
+#endif
+
     // Enable Local Time Stamp for getting network time
     sendAT(GF("+CLTS=1"));
     if (waitResponse(10000L) != 1) { return false; }
@@ -532,12 +541,6 @@ class TinyGsmSim800 : public TinyGsmModem<TinyGsmSim800>,
     if (waitResponse() != 1) return false;
 #endif
 #endif
-
-    // Set the TCP keepalive settings 
-    // Defaults: +CIPTKA: 1,7200,75,9
-//      sendAT(GF("+CIPTKA=1,7200,75,9"));
-//    sendAT(GF("+CIPTKA=0"));
-//    waitResponse();
 
     sendAT(GF("+CIPSTART="), mux, ',', GF("\"TCP"), GF("\",\""), host,
            GF("\","), port);

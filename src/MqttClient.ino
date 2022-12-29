@@ -59,6 +59,9 @@
 #define TINY_GSM_USE_GPRS true
 #define TINY_GSM_USE_WIFI false
 
+// Override TCP Keepalive to 5 minutes (only in customised SIM800L module for now)
+#define TINY_GSM_TCP_KEEPALIVE_SECS 300
+
 // set GSM PIN, if any
 #define GSM_PIN ""
 
@@ -101,6 +104,14 @@ PubSubClient mqtt(client);
 
 //#define MQTT_KEEPALIVE_SECS 120
 
+// Define maximum KeepAlive which is circa 18 hours
+// (This is because we will use TCP KeepAlives to keep the connection up and monitored)
+#define MQTT_KEEPALIVE_SECS 65535
+
+// Number of times we'll try to reconnect MQTT before dropping
+// back and testing cellular
+#define MQTT_MAX_CONNECTION_ATTEMPTS 10
+
 // If we want to test out regular publishing of an MQTT
 // payload then define this and we will publish to
 // `topicTele` with payload `payloadTele`
@@ -113,11 +124,21 @@ PubSubClient mqtt(client);
 
 int ledStatus = LOW;
 
-uint32_t lastReconnectAttempt = 0;
-uint32_t lastMetricsOutput = 0;
+uint32_t _lastReconnectAttempt = 0;
+uint32_t _lastMetricsOutput = 0;
+uint32_t _lastCellularCall = 0;
+uint32_t _networkWaitStartTimeMs = 0;
+uint32_t _gprsWaitStartTimeMs = 0;
+
 #ifdef MQTT_PUBLISH_INTERVAL_SECS
 uint32_t lastTelePublish = 0;
 #endif
+
+// Wait for network for up to 3 minutes before reinitialising modem
+#define MAX_NETWORK_WAIT_SECS 180
+
+// Wait for up to 1 minute for GPRS PDP to come up (or LTE)
+#define MAX_GPRS_WAIT_SECS 60
 
 String getFullTopic(const char *topixPrefix, const char *topicFragment)
 {
@@ -171,110 +192,146 @@ void setup()
 {
     // Set console baud rate
     SerialMon.begin(115200);
+}
 
-    delay(10);
-
-    setupModem();
-
-    SerialMon.println("Wait...");
-
-    // Set GSM module baud rate and UART pins
-    SerialAT.begin(115200, SERIAL_8N1, MODEM_RX, MODEM_TX);
-
-    delay(6000);
-
-    // Restart takes quite some time
-    // To skip it, call init() instead of restart()
-    SerialMon.println("Initializing modem...");
-    modem.restart();
-    // modem.init();
-
-    String modemInfo = modem.getModemInfo();
-    SerialMon.print("Modem Info: ");
-    SerialMon.println(modemInfo);
-
-#if TINY_GSM_USE_GPRS
-    // Unlock your SIM card with a PIN if needed
-    if ( GSM_PIN && modem.getSimStatus() != 3 ) {
-        modem.simUnlock(GSM_PIN);
-    }
-#endif
-
-    _imei = modem.getIMEI();
-    SerialMon.println((String)"IMEI: " + _imei);
-
-    SerialMon.print("Waiting for network...");
-    if (!modem.waitForNetwork()) {
-        SerialMon.println(" fail");
-        delay(10000);
-        return;
-    }
-    SerialMon.println(" success");
-
-    if (modem.isNetworkConnected()) {
-        SerialMon.println("Network connected");
+   
+void loop()
+{
+    // Call cellular handler every 1s
+    uint32_t t = millis();
+    if(t - _lastCellularCall > 1000) {
+        _lastCellularCall = t;
+        handleCellular();
     }
 
-    // GPRS connection parameters are usually set after network registration
-    SerialMon.print(F("Connecting to "));
-    SerialMon.print(apn);
-    if (!modem.gprsConnect(apn, gprsUser, gprsPass)) {
-        SerialMon.println(" - failed");
-        delay(10000);
-        return;
+    // Fire out some metrics for debugging
+    if(t - _lastMetricsOutput > MQTT_LOG_METRICS_SECS * 1000) {
+        _lastMetricsOutput = t;
+        uint32_t txCount = mqtt.getTxCount();
+        uint32_t rxCount = mqtt.getRxCount();
+        SerialMon.println((String)"##### PubSubClient Tx Bytes: " + txCount + ", Rx Bytes: " + rxCount);
+        Serial.println("[APP] Free memory: " + String(esp_get_free_heap_size()) + " bytes");
     }
-    SerialMon.println(" - success");
-
-    if (modem.isGprsConnected()) {
-        SerialMon.println("GPRS connected");
-    }
-
-    SerialMon.println("Local IP; " + modem.getLocalIP());
-
-    // MQTT Broker setup
-    mqtt.setServer(broker, 1883);
-    mqtt.setCallback(mqttCallback);
-#ifdef MQTT_KEEPALIVE_SECS
-    // By default PubSubClient sends keepalives at 15s intervals
-    SerialMon.println((String)"Set MQTT KeepAlive to " + MQTT_KEEPALIVE_SECS + " seconds");
-
-    mqtt.setKeepAlive(MQTT_KEEPALIVE_SECS);
-#endif
 }
 
 enum ConnectState
 {
     UNKNOWN,
     ACQUIRE_NETWORK,
-    ACQUIRE_DATA,
+    WAIT_FOR_NETWORK,
+    ACQUIRE_GPRS,
+    WAIT_FOR_GPRS,
     ACQUIRE_MQTT,
     CONNECTED
 };
 
 ConnectState _currentState = UNKNOWN;
 
-void loop()
+// Called every 1s
+void handleCellular()
 {
     uint32_t t;
-
-loopstart:
+    uint8_t connectionAttempt = 0;
 
     if(_currentState == UNKNOWN || _currentState == ACQUIRE_NETWORK) {
+        // Assume modem will retry to connect
         if(!modem.isNetworkConnected() ) {
             SerialMon.println("=== NETWORK NOT CONNECTED ===");
-            delay(1000);
-            _currentState = ACQUIRE_NETWORK;
-            goto loopstart;
+
+            setupModem();
+
+            SerialMon.println("Wait...");
+
+            // Set GSM module baud rate and UART pins
+            SerialAT.begin(115200, SERIAL_8N1, MODEM_RX, MODEM_TX);
+
+            delay(6000);
+
+            // Restart takes quite some time
+            // To skip it, call init() instead of restart()
+            SerialMon.println("Initializing modem...");
+            modem.restart();
+            // modem.init();
+
+            String modemInfo = modem.getModemInfo();
+            SerialMon.print("Modem Info: ");
+            SerialMon.println(modemInfo);
+
+#if TINY_GSM_USE_GPRS
+            // Unlock your SIM card with a PIN if needed
+            if ( GSM_PIN && modem.getSimStatus() != 3 ) {
+                modem.simUnlock(GSM_PIN);
+            }
+#endif
+
+            _imei = modem.getIMEI();
+            SerialMon.println((String)"IMEI: " + _imei);
+
+            _currentState = WAIT_FOR_NETWORK;
+            _networkWaitStartTimeMs = millis();
+        }        
+        else {
+            SerialMon.println("=== NETWORK CONNECTED ===");
+            _currentState = ACQUIRE_GPRS;
         }
     }
 
-    if(_currentState == ACQUIRE_DATA) {
+    if(_currentState == WAIT_FOR_NETWORK) {
+        if(!modem.isNetworkConnected() ) {
+            uint32_t t = millis();
+            if( (t-_networkWaitStartTimeMs) > MAX_NETWORK_WAIT_SECS*1000) {
+                SerialMon.println("=== TIMEOUT WAITING FOR NETWORK. REINITIALISE MODEM ===");
+                _currentState = UNKNOWN;
+                return;
+            }
+            SerialMon.println((String)"=== WAITING FOR NETWORK " + (t-_networkWaitStartTimeMs)/1000 + " secs ===");
+            return;
+
+        }
+        SerialMon.println("=== NETWORK CONNECTED ===");
+        _currentState = ACQUIRE_GPRS;
+    }
+
+    if(_currentState == ACQUIRE_GPRS) {
         if(!modem.isGprsConnected()) {
             SerialMon.println("=== GPRS NOT CONNECTED ===");
-            delay(1000);
-            _currentState = ACQUIRE_DATA;
-            goto loopstart;
+
+            // GPRS connection parameters are usually set after network registration
+            SerialMon.print(F("Connecting to "));
+            SerialMon.print(apn);
+
+            //
+            // TODO: This call seems to block for a significant time. Might need to rewrite to make non-blocking?
+            //
+            if (!modem.gprsConnect(apn, gprsUser, gprsPass)) {
+                SerialMon.println(" - failed");
+                return;
+            }
+            SerialMon.println(" - success");
+            _gprsWaitStartTimeMs = millis();
+            _currentState = WAIT_FOR_GPRS;
+        } else {
+            SerialMon.println("=== GPRS CONNECTED ===");
+            _currentState = ACQUIRE_MQTT;
         }
+    }
+
+    if(_currentState == WAIT_FOR_GPRS) {
+        if (!modem.isGprsConnected()) {
+            uint32_t t = millis();
+            if( (t-_gprsWaitStartTimeMs) > MAX_GPRS_WAIT_SECS*1000) {
+                SerialMon.println("=== TIMEOUT WAITING FOR GPRS. REINITIALISE MODEM ===");
+                _currentState = UNKNOWN;
+                return;
+            }
+
+            SerialMon.println("=== WAITING FOR GPRS CONNECT");
+            return;
+        }
+
+        SerialMon.println("Local IP; " + modem.getLocalIP());
+
+        _currentState = ACQUIRE_MQTT;
     }
 
     // Currently we ALWAYS check each loop that MQTT is connected
@@ -282,42 +339,48 @@ loopstart:
         if (!mqtt.connected()) {
             _currentState = ACQUIRE_MQTT;
             SerialMon.println("=== MQTT NOT CONNECTED ===");
+
+            // MQTT Broker setup
+            mqtt.setServer(broker, 1883);
+            mqtt.setCallback(mqttCallback);
+#ifdef MQTT_KEEPALIVE_SECS
+            // By default PubSubClient sends keepalives at 15s intervals
+            SerialMon.println((String)"Set MQTT KeepAlive to " + MQTT_KEEPALIVE_SECS + " seconds");
+
+            mqtt.setKeepAlive(MQTT_KEEPALIVE_SECS);
+#endif
+
             // Reconnect every 10 seconds
             t = millis();
-            if (t - lastReconnectAttempt > 10000L) {
-                lastReconnectAttempt = t;
+            if (t - _lastReconnectAttempt > 10000L) {
+                _lastReconnectAttempt = t;
                 if (mqttConnect()) {
-                    lastReconnectAttempt = 0;
+                    _lastReconnectAttempt = 0;
+                    connectionAttempt = 0;
+                    SerialMon.println("=== MQTT CONNECTED ===");
+                    _currentState = CONNECTED;
                 }
                 else {
-                    // Go back and check network
-                    _currentState = UNKNOWN;
+                    if(connectionAttempt++ >= MQTT_MAX_CONNECTION_ATTEMPTS) {
+                        connectionAttempt = 0;
+                        // Go back and check network
+                        _currentState = UNKNOWN;
+                    }
+                    return;
                 }
             }
-            delay(1000);
-            goto loopstart;
         }
     }
 
-    _currentState = CONNECTED;
-
 #ifdef MQTT_PUBLISH_INTERVAL_SECS
     t = millis();
-    if(t - lastTelePublish > MQTT_PUBLISH_INTERVAL_SECS * 1000) {
-        lastTelePublish = t;
+    if(t - _lastTelePublish > MQTT_PUBLISH_INTERVAL_SECS * 1000) {
+        _lastTelePublish = t;
         SerialMon.println((String)"Publishing: " + getFullTopic(topicPrefix, topicFragmentTele).c_str() + ": " + payloadTele);
         mqtt.publish(getFullTopic(topicPrefix, topicFragmentTele).c_str(), payloadTele);
     }
 #endif
 
-    t = millis();
-    if(t - lastMetricsOutput > MQTT_LOG_METRICS_SECS * 1000) {
-        lastMetricsOutput = t;
-        uint32_t txCount = mqtt.getTxCount();
-        uint32_t rxCount = mqtt.getRxCount();
-        SerialMon.println((String)"##### PubSubClient Tx Bytes: " + txCount + ", Rx Bytes: " + rxCount);
-        Serial.println("[APP] Free memory: " + String(esp_get_free_heap_size()) + " bytes");
-    }
-    
+    // Might need to run this more than every second?    
     mqtt.loop();
 }
