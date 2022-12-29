@@ -75,11 +75,13 @@ const char *broker = "mqtt.dynamicdevices.co.uk";
 
 const char *topicPrefix = "GsmClientTest";
 
-const char *topicFragmentLed = "led";
-const char *topicFragmentInit = "init";
+const char *topicFragmentCmnd = "cmnd";
+const char *topicFragmentStatus = "status";
+const char *topicFragmentLWTStatus = "lwtstatus";
 const char *topicFragmentTele = "tele";
-const char *topicFragmentLedStatus = "ledStatus";
 
+const char *payloadOnline = "ONLINE";
+const char *payloadOffline = "OFFLINE";
 const char *payloadTele = "This is a payload of 32 bytes...";
 const char *payloadInit = "GsmClientTest started";
 
@@ -159,10 +161,11 @@ void mqttCallback(char *topic, byte *payload, unsigned int len)
     SerialMon.println();
 
     // Only proceed if incoming message's topic matches
-    if (String(topic) == getFullTopic(topicPrefix, topicFragmentLed)) {
-        ledStatus = !ledStatus;
-        digitalWrite(LED_GPIO, ledStatus);
-        mqtt.publish(getFullTopic(topicPrefix, topicFragmentLedStatus).c_str(), ledStatus ? "1" : "0");
+    if (String(topic) == getFullTopic(topicPrefix, topicFragmentCmnd)) {
+        // Do stuff here!
+
+        // Then return the success / failure
+        mqtt.publish(getFullTopic(topicPrefix, topicFragmentStatus).c_str(), "UNHANDLED");
     }
 }
 
@@ -171,8 +174,14 @@ boolean mqttConnect()
     SerialMon.print("Connecting to ");
     SerialMon.print(broker);
 
-    // Connect to MQTT Broker
-    boolean status = mqtt.connect( String("GsmClientTest" + _imei).c_str());
+    // Connect to MQTT Broker with LWT
+    boolean status = mqtt.connect( 
+        String("MqttClient" + _imei).c_str(), // Client ID
+        getFullTopic(topicPrefix, topicFragmentLWTStatus).c_str(), // Will Topic
+        1, // Will QoS
+        true, // Will Retain (subscribers will see this in future even if they don't currently have a subscription)
+        payloadOffline // Will Message
+    );
 
     // Or, if you want to authenticate MQTT:
     //boolean status = mqtt.connect("GsmClientName", "mqtt_user", "mqtt_pass");
@@ -182,9 +191,13 @@ boolean mqttConnect()
         return false;
     }
     SerialMon.println(" success");
-    SerialMon.println((String)"Publishing: " + getFullTopic(topicPrefix, topicFragmentInit).c_str() + ": " + payloadInit);
-    mqtt.publish(getFullTopic(topicPrefix, topicFragmentInit).c_str(), payloadInit);
-    mqtt.subscribe(getFullTopic(topicPrefix, topicFragmentLed).c_str());
+
+    // Publish ONLINE status and make sure it's retained
+    SerialMon.println((String)"Publishing: " + getFullTopic(topicPrefix, topicFragmentLWTStatus).c_str() + ": " + payloadOnline);
+    mqtt.publish(getFullTopic(topicPrefix, topicFragmentLWTStatus).c_str(), payloadOnline, true);
+
+    // Suscribe to commands
+    mqtt.subscribe(getFullTopic(topicPrefix, topicFragmentCmnd).c_str());
     return mqtt.connected();
 }
 
