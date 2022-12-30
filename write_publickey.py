@@ -1,8 +1,8 @@
 Import("env")
 
 upload_port = env.GetProjectOption("upload_port")
-keyfile = "publickey.pub"
-tmpfile = "publickey.b64"
+keyfile = "publickey.b64"
+tmpfile = "publickey.tmp"
 
 env.AddCustomTarget(
     name="write_publickey",
