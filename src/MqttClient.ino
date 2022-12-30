@@ -36,6 +36,9 @@
 // Should we advertise with Bluetooth using OpenHaystack (Apple iTag implementation) ?
 #define SUPPORT_OPENHAYSTACK 
 
+// Should we test the modem?
+#define SUPPORT_MODEM
+
 // TinyGSM modem now set in platform.ini
 //#define TINY_GSM_MODEM_SIM800
 
@@ -223,19 +226,23 @@ void setup()
    
 void loop()
 {
+#ifdef SUPPORT_MODEM
     // Call cellular handler every 1s
     uint32_t t = millis();
     if(t - _lastCellularCall > 1000) {
         _lastCellularCall = t;
         handleCellular();
     }
+#endif
 
     // Fire out some metrics for debugging
     if(t - _lastMetricsOutput > MQTT_LOG_METRICS_SECS * 1000) {
         _lastMetricsOutput = t;
+#ifdef SUPPORT_MODEM
         uint32_t txCount = mqtt.getTxCount();
         uint32_t rxCount = mqtt.getRxCount();
         SerialMon.println((String)"##### PubSubClient Tx Bytes: " + txCount + ", Rx Bytes: " + rxCount);
+#endif
         Serial.println("[APP] Free memory: " + String(esp_get_free_heap_size()) + " bytes");
     }
 }
