@@ -27,17 +27,17 @@
  *
  **************************************************************/
 
-// Please select the corresponding model
+#define CORE_DEBUG_LEVEL 5
 
-//  #define SIM800L_IP5306_VERSION_20190610
-// #define SIM800L_AXP192_VERSION_20200327
-// #define SIM800C_AXP192_VERSION_20200609
-#define SIM800L_IP5306_VERSION_20200811
-
+#ifdef TINY_GSM_MODEM_SIM800
 #include "utilities.h"
+#endif
 
-// Select your modem:
-#define TINY_GSM_MODEM_SIM800
+// Should we advertise with Bluetooth using OpenHaystack (Apple iTag implementation) ?
+#define SUPPORT_OPENHAYSTACK 
+
+// TinyGSM modem now set in platform.ini
+//#define TINY_GSM_MODEM_SIM800
 
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
 #define SerialMon Serial
@@ -203,10 +203,21 @@ boolean mqttConnect()
     return mqtt.connected();
 }
 
+extern "C" void openhaystack_main(void);
+
 void setup()
 {
     // Set console baud rate
     SerialMon.begin(115200);
+    
+    delay(5000);
+
+    log_i("Starting Up");
+
+#ifdef SUPPORT_OPENHAYSTACK
+    // Setup OpenHaystack
+    openhaystack_main();
+#endif
 }
 
    
@@ -253,7 +264,9 @@ void handleCellular()
         if(!modem.isNetworkConnected() ) {
             SerialMon.println("=== NETWORK NOT CONNECTED ===");
 
+#ifdef TINY_GSM_MODEM_SIM800
             setupModem();
+#endif
 
             SerialMon.println("Wait...");
 
