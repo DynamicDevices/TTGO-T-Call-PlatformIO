@@ -171,7 +171,14 @@ void mqttCallback(char *topic, byte *payload, unsigned int len)
         if(String((char *)payload) == String("reset")) {
             // Then return the success / failure
             mqtt.publish(getFullTopic(topicPrefix, topicFragmentStatus).c_str(), "OK");
-            delay(5000);
+
+            // Delay a bit progressing MQTT state machine to try to get the response out
+            int count = 0;
+            while(count++ < 50) {
+                mqtt.loop();
+               delay(100);
+            }
+
             ESP.restart();
         } else {
             // Then return the success / failure
