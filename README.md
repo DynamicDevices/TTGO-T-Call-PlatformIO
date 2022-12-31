@@ -48,7 +48,7 @@ The process you'd follow is
 - Copy the device public advertising key
 - Put this into the `publickey.b64` file here
 - Write the firmware to the ESP32 (as this currently erases the key partition - need to look at this)
-- Write teh public key
+- Write the public key
 
 After about half an hour - assuming iPhones are around - you should see the location pop up on the OpenHaystack application
 
