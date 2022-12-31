@@ -168,9 +168,15 @@ void mqttCallback(char *topic, byte *payload, unsigned int len)
     // Only proceed if incoming message's topic matches
     if (String(topic) == getFullTopic(topicPrefix, topicFragmentCmnd)) {
         // Do stuff here!
-
-        // Then return the success / failure
-        mqtt.publish(getFullTopic(topicPrefix, topicFragmentStatus).c_str(), "UNHANDLED");
+        if(String((char *)payload) == String("reset")) {
+            // Then return the success / failure
+            mqtt.publish(getFullTopic(topicPrefix, topicFragmentStatus).c_str(), "OK");
+            delay(5000);
+            ESP.restart();
+        } else {
+            // Then return the success / failure
+            mqtt.publish(getFullTopic(topicPrefix, topicFragmentStatus).c_str(), "UNHANDLED");
+        }
     }
 }
 
