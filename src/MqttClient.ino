@@ -272,12 +272,12 @@ enum ConnectState
 };
 
 ConnectState _currentState = UNKNOWN;
+uint8_t _connectionAttempt = 0;
 
 // Called every 1s
 void handleCellular()
 {
     uint32_t t;
-    uint8_t connectionAttempt = 0;
 
     if(_currentState == UNKNOWN || _currentState == ACQUIRE_NETWORK) {
         // Assume modem will retry to connect
@@ -404,13 +404,13 @@ void handleCellular()
                 _lastReconnectAttempt = t;
                 if (mqttConnect()) {
                     _lastReconnectAttempt = 0;
-                    connectionAttempt = 0;
+                    _connectionAttempt = 0;
                     SerialMon.println("=== MQTT CONNECTED ===");
                     _currentState = CONNECTED;
                 }
                 else {
-                    if(connectionAttempt++ >= MQTT_MAX_CONNECTION_ATTEMPTS) {
-                        connectionAttempt = 0;
+                    if(_connectionAttempt++ >= MQTT_MAX_CONNECTION_ATTEMPTS) {
+                        _connectionAttempt = 0;
                         // Go back and check network
                         _currentState = UNKNOWN;
                     }
