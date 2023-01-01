@@ -167,7 +167,7 @@ void mqttCallback(char *topic, byte *payload, unsigned int len)
     // Only proceed if incoming message's topic matches
     if (String(topic) == getFullTopic(topicPrefix, topicFragmentCmnd)) {
         // Do stuff here!
-        if(String((char *)payload) == String("reset")) {
+        if(String((char *)payload, len) == String("reset")) {
             // Then return the success / failure
             mqtt.publish(getFullTopic(topicPrefix, topicFragmentStatus).c_str(), "OK");
 
