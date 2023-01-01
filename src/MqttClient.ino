@@ -353,6 +353,8 @@ void handleCellular()
             //
             if (!modem.gprsConnect(apn, gprsUser, gprsPass)) {
                 SerialMon.println(" - failed");
+                SerialMon.println("=== TIMEOUT WAITING FOR GPRS. REINITIALISE MODEM ===");
+                _currentState = UNKNOWN;
                 return;
             }
             SerialMon.println(" - success");
