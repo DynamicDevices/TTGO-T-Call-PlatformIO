@@ -49,7 +49,7 @@
 #define SerialAT Serial0
 
 // See all AT commands, if wanted
-#define DUMP_AT_COMMANDS
+//#define DUMP_AT_COMMANDS
 
 // Define the serial console for debug prints, if needed
 #define TINY_GSM_DEBUG SerialMon
