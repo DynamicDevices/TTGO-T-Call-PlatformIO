@@ -151,13 +151,15 @@ void openhaystack_main(void)
         return;
     }
 
-    // TODO: For some reason BLE mode only is not supported?
+    // TODO: For some reason BLE mode only is not supported on TTGO-TCALL ESP32
     //
     // @see: https://github.com/espressif/esp-idf/blob/dca0377e19c6e514c0c694b521c3495a6d46c3af/components/bt/include/bt.h#L64
     //
-    if ((status = esp_bt_controller_enable(ESP_BT_MODE_BTDM)) != ESP_OK) {
-        ESP_LOGE(LOG_TAG, "esp_bt_controller_enable: %s", esp_err_to_name(status));
-        return;
+    if ((status = esp_bt_controller_enable(ESP_BT_MODE_BLE)) != ESP_OK) {
+        if ((status = esp_bt_controller_enable(ESP_BT_MODE_BTDM)) != ESP_OK) {
+            ESP_LOGE(LOG_TAG, "esp_bt_controller_enable: %s", esp_err_to_name(status));
+            return;
+        }
     }
 
     if ((status = esp_bluedroid_init()) != ESP_OK) {
