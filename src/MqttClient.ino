@@ -117,7 +117,7 @@ PubSubClient mqtt(client);
 
 // Number of times we'll try to reconnect MQTT before dropping
 // back and testing cellular
-#define MQTT_MAX_CONNECTION_ATTEMPTS 10
+#define MQTT_MAX_CONNECTION_ATTEMPTS 3
 
 // If we want to test out regular publishing of an MQTT
 // payload then define this and we will publish to
