@@ -46,7 +46,6 @@
 #define SerialMon Serial
 
 // Set serial for AT commands (to the module)
-// Use Hardware Serial on Mega, Leonardo, Micro
 #define SerialAT Serial0
 
 // See all AT commands, if wanted
