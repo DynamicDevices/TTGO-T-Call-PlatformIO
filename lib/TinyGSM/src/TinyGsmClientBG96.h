@@ -172,6 +172,12 @@ class TinyGsmBG96 : public TinyGsmModem<TinyGsmBG96>,
     sendAT(GF("E0"));  // Echo Off
     if (waitResponse() != 1) { return false; }
 
+#ifdef TINY_GSM_TCP_KEEPALIVE_SECS
+    DBG((String)"Overriding TCP KeepAlive to " + TINY_GSM_TCP_KEEPALIVE_SECS + " secs");
+    sendAT(GF((String)"+QICFG=\"tcp/keepalive\",1," + TINY_GSM_TCP_KEEPALIVE_SECS + "," + TINY_GSM_TCP_KEEPALIVE_SECS + ",9"));
+    if (waitResponse() != 1) { return false; }
+#endif
+
 #ifdef TINY_GSM_DEBUG
     sendAT(GF("+CMEE=2"));  // turn on verbose error codes
 #else
