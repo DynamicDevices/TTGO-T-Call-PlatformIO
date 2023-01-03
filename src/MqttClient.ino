@@ -46,7 +46,7 @@
 #define SerialMon Serial
 
 // Set serial for AT commands (to the module)
-#define SerialAT Serial0
+#define SerialAT Serial
 
 // See all AT commands, if wanted
 //#define DUMP_AT_COMMANDS
