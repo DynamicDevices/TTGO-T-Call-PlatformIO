@@ -35,7 +35,9 @@ Currently the code runs on the TTGO T-CALL and there are a few defines you can u
 
 There's also the beginnings of a subscription based command handler which at the moment just allows us to remotely reset devices
 
-I've found with the current settings I can maintain a reliable connection over cellular with very low data overhead. I'll be writing this up when I have some time.
+I've found with the current settings I can maintain a reliable connection over cellular with very low data overhead. 
+
+I am starting to write up my testing and results in the Wiki [here](https://github.com/DynamicDevices/TTGO-T-Call-PlatformIO/wiki/Analysis-of-data-overhead:-MQTT-Keepalive-versus-TCP-KeepAlive)
 
 # OpenHaystack BLE based Apple AirTag location
 
