@@ -6,6 +6,14 @@ I want to do some cellular work and the TTGO T-CALL is a rather neat little ESP3
 
 Platform.io doesn't seem to have board support for the T-CALL at the time of writing (31/12/22) but there's a nice repo from `NailsOnLinux` which shows how to add custom board support. So props to them and I have taken their original demonstration code which is [here](https://github.com/nailsonlinux/TTGO-T-Call-PlatformIO)
 
+# Video - getting going with this codebase
+
+I've put together an IoT Training Video which you can take a look at to walk through how to get up and running with this code.
+
+[![Iot Training Video](https://user-images.githubusercontent.com/1537834/210586917-a311c8b3-47a7-455c-bb1c-0d97e0b26c4e.png)](https://www.youtube.com/watch?v=7bi77btM4Us)
+
+This walks you through building and uploading the code to the TTGO-CALL, acquiring the cellular network, bringing up a data context and connecting to an MQTT broker to publish messages and subscribe to messages over cellular.
+
 # MQTT over Cellular
 
 I want to play with low bandwidth comms. over cellular and MQTT seems a good starting point.
