@@ -64,7 +64,7 @@
 // Q. I think the standard TCP timeout is 15 minutes so lets set TCP KeepAlive to 10 minutes?
 //
 // Override TCP Keepalive to 10 minutes (only in customised SIM800L module for now)
-#define TINY_GSM_TCP_KEEPALIVE_SECS 600
+//#define TINY_GSM_TCP_KEEPALIVE_SECS 600
 
 // set GSM PIN, if any
 #define GSM_PIN ""
@@ -112,7 +112,7 @@ PubSubClient mqtt(client);
 
 // Define maximum KeepAlive which is circa 18 hours
 // (This is because we will use TCP KeepAlives to keep the connection up and monitored)
-#define MQTT_KEEPALIVE_SECS 65535
+//#define MQTT_KEEPALIVE_SECS 65535
 
 // Number of times we'll try to reconnect MQTT before dropping
 // back and testing cellular
