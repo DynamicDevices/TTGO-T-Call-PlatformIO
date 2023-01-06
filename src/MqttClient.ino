@@ -63,8 +63,8 @@
 
 // Q. I think the standard TCP timeout is 15 minutes so lets set TCP KeepAlive to 10 minutes?
 //
-// Override TCP Keepalive to 15 seconds for testing (only in customised SIM800L module for now)
-#define TINY_GSM_TCP_KEEPALIVE_SECS 15
+// Override TCP Keepalive to 30 seconds for testing (only in customised SIM800L module for now)
+#define TINY_GSM_TCP_KEEPALIVE_SECS 30
 
 // set GSM PIN, if any
 #define GSM_PIN ""
