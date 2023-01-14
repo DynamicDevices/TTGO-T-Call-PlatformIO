@@ -5,3 +5,4 @@
 .vscode/ipch
 *.log
 *.b64
+publickey.b64
