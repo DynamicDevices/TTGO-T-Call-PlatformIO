@@ -178,12 +178,14 @@ void setupModem()
     // Turn on the Modem power first
     digitalWrite(MODEM_POWER_ON, HIGH);
 
+#ifndef UPDATE_MODEM_FIRMWARE
     // Pull down PWRKEY for more than 1 second according to manual requirements
     digitalWrite(MODEM_PWRKEY, HIGH);
     delay(100);
     digitalWrite(MODEM_PWRKEY, LOW);
     delay(1000);
     digitalWrite(MODEM_PWRKEY, HIGH);
+#endif
 
     // Initialize the indicator as an output
     pinMode(LED_GPIO, OUTPUT);

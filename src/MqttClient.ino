@@ -27,14 +27,16 @@
  *
  **************************************************************/
 
-#define CORE_DEBUG_LEVEL 5
+// Set serial for debug console (to the Serial Monitor, default speed 115200)
+#define SerialMon Serial
+
+#include <esp_wifi.h>
+
+#ifdef USE_GSM
 
 #ifdef TINY_GSM_MODEM_SIM800
 #include "utilities.h"
 #endif
-
-// Should we advertise with Bluetooth using OpenHaystack (Apple iTag implementation) ?
-#define SUPPORT_OPENHAYSTACK 
 
 // Should we test the modem?
 #define SUPPORT_MODEM
@@ -42,14 +44,11 @@
 // TinyGSM modem now set in platform.ini
 //#define TINY_GSM_MODEM_SIM800
 
-// Set serial for debug console (to the Serial Monitor, default speed 115200)
-#define SerialMon Serial
-
 // Set serial for AT commands (to the module)
 #define SerialAT Serial1
 
 // See all AT commands, if wanted
-//#define DUMP_AT_COMMANDS
+#define DUMP_AT_COMMANDS
 
 // Define the serial console for debug prints, if needed
 #define TINY_GSM_DEBUG SerialMon
@@ -92,7 +91,15 @@ const char *payloadInit = "GsmClientTest started";
 String _imei = "unknown";
 
 #include <TinyGsmClient.h>
+
+//#define USE_MQTTSN
+#define USE_TLS
+
+#ifdef USE_MQTTSN
+#include <PubSubClientSN.h>
+#else
 #include <PubSubClient.h>
+#endif
 
 #ifdef DUMP_AT_COMMANDS
 #include <StreamDebugger.h>
@@ -101,7 +108,12 @@ TinyGsm modem(debugger);
 #else
 TinyGsm modem(SerialAT);
 #endif
+#ifdef USE_TLS
+TinyGsmClientSecure client(modem);
+#else
 TinyGsmClient client(modem);
+#endif
+
 PubSubClient mqtt(client);
 
 // How often do we send MQTT KeepAlive messages?
@@ -218,6 +230,8 @@ boolean mqttConnect()
     return mqtt.connected();
 }
 
+#endif // USE_GSM
+
 extern "C" void openhaystack_main(void);
 
 void setup()
@@ -225,19 +239,62 @@ void setup()
     // Set console baud rate
     SerialMon.begin(115200);
     
+#ifdef UPDATE_MODEM_FIRMWARE
+            setupModem();
+
+            // Set GSM module baud rate and UART pins
+            SerialAT.begin(115200, SERIAL_8N1, MODEM_RX, MODEM_TX);
+#else
     delay(5000);
 
     log_i("Starting Up");
+#endif
+
+#ifdef BOARD_LUATOS_ESP32C3
+    // Disable LED outputs - not really happy about these being outputs?
+    gpio_set_direction(GPIO_NUM_12, GPIO_MODE_OUTPUT);
+    gpio_set_direction(GPIO_NUM_13, GPIO_MODE_OUTPUT);
+#endif
 
 #ifdef SUPPORT_OPENHAYSTACK
     // Setup OpenHaystack
     openhaystack_main();
+    
+    // Allow OpenHaystack advertising to start up
+    delay(5000);
+
+    esp_err_t status;
+
+    // Make sure WiFi is disabled
+    if ((status = esp_wifi_stop()) != ESP_OK) {
+        log_e("esp_wifi_stop: %s", esp_err_to_name(status));
+        return;
+    }
+
+    // Enter light sleep
+    if ((status = esp_light_sleep_start()) != ESP_OK) {
+        log_e("esp_light_sleep_start: %s", esp_err_to_name(status));
+        return;
+    }
+    log_i("Should be asleep");
 #endif
 }
 
-   
 void loop()
 {
+#ifdef USE_GSM
+
+#ifdef UPDATE_MODEM_FIRMWARE
+loop_start:
+    while (SerialAT.available()) {
+        SerialMon.write(SerialAT.read());
+    }
+    while (SerialMon.available()) {
+        SerialAT.write(SerialMon.read());
+    }
+    goto loop_start;
+#endif
+
 #ifdef SUPPORT_MODEM
     // Call cellular handler every 1s
     uint32_t t = millis();
@@ -257,7 +314,11 @@ void loop()
 #endif
         Serial.println("[APP] Free memory: " + String(esp_get_free_heap_size()) + " bytes");
     }
+
+#endif // USE_GSM
 }
+
+#ifdef USE_GSM
 
 enum ConnectState
 {
@@ -390,7 +451,11 @@ void handleCellular()
             SerialMon.println("=== MQTT NOT CONNECTED ===");
 
             // MQTT Broker setup
+#ifdef USE_TLS
+            mqtt.setServer(broker, 8883);
+#else
             mqtt.setServer(broker, 1883);
+#endif
             mqtt.setCallback(mqttCallback);
 #ifdef MQTT_KEEPALIVE_SECS
             // By default PubSubClient sends keepalives at 15s intervals
@@ -433,3 +498,5 @@ void handleCellular()
     // Might need to run this more than every second?    
     mqtt.loop();
 }
+
+#endif // USE_GSM

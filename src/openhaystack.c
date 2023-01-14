@@ -135,6 +135,8 @@ void openhaystack_main(void)
     esp_log_level_set(LOG_TAG, ESP_LOG_DEBUG);
     ESP_LOGI(LOG_TAG, "Initialising OpenHayStack");
 
+    ESP_ERROR_CHECK(nvs_flash_init());
+
 #ifndef ARDUINO_BOARD
     ESP_ERROR_CHECK(nvs_flash_init());
 #else
