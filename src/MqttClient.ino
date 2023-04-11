@@ -28,7 +28,9 @@
  **************************************************************/
 
 // Set serial for debug console (to the Serial Monitor, default speed 115200)
+#ifndef SerialMon
 #define SerialMon Serial
+#endif
 
 #include <esp_wifi.h>
 
@@ -89,11 +91,12 @@ const char *payloadTele = "This is a payload of 32 bytes...";
 const char *payloadInit = "GsmClientTest started";
 
 String _imei = "unknown";
+String _imsi = "unknown";
 
 #include <TinyGsmClient.h>
 
 //#define USE_MQTTSN
-#define USE_TLS
+//#define USE_TLS
 
 #ifdef USE_MQTTSN
 #include <PubSubClientSN.h>
@@ -134,7 +137,8 @@ PubSubClient mqtt(client);
 // payload then define this and we will publish to
 // `topicTele` with payload `payloadTele`
 
-#define MQTT_PUBLISH_INTERVAL_SECS 60*60
+//#define MQTT_PUBLISH_INTERVAL_SECS 60*60
+#define MQTT_PUBLISH_INTERVAL_SECS 10
 
 // Log metrics for how many bytes PubSubClient has sent and
 // received to/from the underlying stream layer periodically
@@ -348,6 +352,30 @@ void handleCellular()
             setupModem();
 #endif
 
+#ifdef TINY_GSM_MODEM_BG96
+// Platform specific to KC prototype
+#define MODEM_POWER_ON 3
+#define MODEM_PWRKEY 21
+
+    pinMode(MODEM_PWRKEY, OUTPUT);
+    pinMode(MODEM_POWER_ON, OUTPUT);
+
+    // Turn off modem
+    digitalWrite(MODEM_POWER_ON, LOW);
+    delay(1000);
+
+    // Turn on the Modem power first
+    digitalWrite(MODEM_POWER_ON, HIGH);
+    delay(1000);
+
+    // Pull down PWRKEY for more than 1 second according to manual requirements
+    digitalWrite(MODEM_PWRKEY, LOW);
+    delay(100);
+    digitalWrite(MODEM_PWRKEY, HIGH);
+    delay(1000);
+    digitalWrite(MODEM_PWRKEY, LOW);
+#endif
+
             SerialMon.println("Wait...");
 
             // Set GSM module baud rate and UART pins
@@ -374,6 +402,9 @@ void handleCellular()
 
             _imei = modem.getIMEI();
             SerialMon.println((String)"IMEI: " + _imei);
+
+            _imsi = modem.getIMSI();
+            SerialMon.println((String)"IMSI: " + _imsi);
 
             _currentState = WAIT_FOR_NETWORK;
             _networkWaitStartTimeMs = millis();
