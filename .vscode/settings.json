@@ -1,0 +1,13 @@
+{
+    "cmake.configureOnOpen": false,
+    "files.associations": {
+        "thread": "cpp",
+        "*.tpp": "cpp",
+        "*.tcc": "cpp",
+        "random": "cpp",
+        "istream": "cpp",
+        "ostream": "cpp",
+        "sstream": "cpp",
+        "streambuf": "cpp"
+    }
+}

@@ -67,6 +67,8 @@ static void DBG_PLAIN(T head, Args... tail) {
   DBG_PLAIN(tail...);
 }
 
+#undef DBG
+
 template <typename... Args>
 static void DBG(Args... args) {
   TINY_GSM_DEBUG.print(GF("["));
@@ -75,6 +77,7 @@ static void DBG(Args... args) {
   DBG_PLAIN(args...);
 }
 }  // namespace
+
 #else
 #define DBG_PLAIN(...)
 #define DBG(...)

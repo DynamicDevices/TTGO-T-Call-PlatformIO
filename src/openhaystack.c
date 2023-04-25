@@ -1,3 +1,5 @@
+#ifdef SUPPORT_OPENHAYSTACK
+
 #include <stdint.h>
 #include <string.h>
 #include <stdbool.h>
@@ -203,3 +205,5 @@ void openhaystack_main(void)
 
     ESP_LOGI(LOG_TAG, "OpenHayStack initialized");
 }
+
+#endif
